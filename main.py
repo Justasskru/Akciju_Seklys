@@ -1,7 +1,8 @@
 import time
 import logging
+import requests
 
-from config import MANO_AKCIJOS, CHECK_INTERVAL
+from config import TELEGRAM_TOKEN, MANO_AKCIJOS, CHECK_INTERVAL
 from price_fetcher import gauti_kaina_ir_pokyti
 from telegram_sender import siusti_telegram, gauti_paskutine_komanda
 from state_manager import uzkrauti_busena, issaugoti_busena
@@ -13,6 +14,21 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logging.info("Programa pradėta")
+
+
+def gauti_paskutini_update_id():
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates"
+    try:
+        r = requests.get(url, params={"timeout": 1}, timeout=5)
+        r.raise_for_status()
+        data = r.json()
+        results = data.get("result", [])
+        if not results:
+            return None
+        return results[-1]["update_id"]
+    except Exception as e:
+        logging.error("Nepavyko gauti paskutinio update_id: %s", e)
+        return None
 
 
 def formatuoti_pokyti(pokytis):
@@ -54,7 +70,8 @@ def help_zinute():
         "/add SYMBOL RIBA - pridėti akciją (pvz: /add TSLA 180)\n"
         "/remove SYMBOL - pašalinti akciją (pvz: /remove TSLA)\n"
         "/interval SEK - pakeisti intervalą sekundėmis (pvz: /interval 300)\n"
-        "/show_interval - parodyti dabartinį intervalą"
+        "/show_interval - parodyti dabartinį intervalą\n"
+        "/kill - nutraukti programą"
     )
 
 
@@ -142,19 +159,23 @@ def apdoroti_komanda(komanda, stocks, check_interval, busena):
     elif cmd == "/kill":
         siusti_telegram("🛑 Programa nutraukiama pagal komandą /kill")
         logging.info("Programa nutraukiama pagal komandą /kill")
-        exit(0)
-        
+        raise SystemExit
+
     return stocks, check_interval
 
 
 def main():
     print("Programa pradėta. Pradedamas ciklas...\n")
     busena = uzkrauti_busena()
-    paskutinis_update_id = None
 
-    # Lokali (runtime) būsena - startuoja iš config
+    # Runtime būsena
     stocks = dict(MANO_AKCIJOS)
     check_interval = int(CHECK_INTERVAL)
+
+    # Svarbiausia dalis: praleidžiam senas žinutes paleidimo metu
+    paskutinis_update_id = gauti_paskutini_update_id()
+    print(f"Start offset: {paskutinis_update_id}")
+    logging.info("Start offset: %s", paskutinis_update_id)
 
     while True:
         print(f"[{time.strftime('%H:%M:%S')}] Pradedamas naujas patikrinimas...")
@@ -167,7 +188,6 @@ def main():
 
         stocks, check_interval = apdoroti_komanda(komanda, stocks, check_interval, busena)
 
-        # Įprastas alert tikrinimas
         for simbolis, norima_riba in stocks.items():
             try:
                 dabartine_kaina, pokytis = gauti_kaina_ir_pokyti(simbolis)
