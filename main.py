@@ -2,10 +2,11 @@ import time
 import logging
 import requests
 
-from config import TELEGRAM_TOKEN, MANO_AKCIJOS, CHECK_INTERVAL
+from config import TELEGRAM_TOKEN
 from price_fetcher import gauti_kaina_ir_pokyti
-from telegram_sender import siusti_telegram, gauti_paskutine_komanda
+from telegram_sender import siusti_telegram, gauti_update
 from state_manager import uzkrauti_busena, issaugoti_busena
+from settings_manager import load_settings, save_settings
 
 logging.basicConfig(
     level=logging.INFO,
@@ -107,6 +108,7 @@ def apdoroti_komanda(komanda, stocks, check_interval, busena):
                 siusti_telegram(f"{simbolis} nėra sąraše. Naudok /add {simbolis} {riba}")
                 return stocks, check_interval
             stocks[simbolis] = riba
+            save_settings({"stocks": stocks, "check_interval": check_interval})
             siusti_telegram(f"✅ Atnaujinta: {simbolis} riba -> {riba} USD")
             logging.info("Atnaujinta riba: %s -> %s", simbolis, riba)
         except ValueError:
@@ -122,6 +124,8 @@ def apdoroti_komanda(komanda, stocks, check_interval, busena):
             stocks[simbolis] = riba
             if simbolis not in busena:
                 busena[simbolis] = False
+            save_settings({"stocks": stocks, "check_interval": check_interval})
+            issaugoti_busena(busena)
             siusti_telegram(f"✅ Pridėta: {simbolis} su riba {riba} USD")
             logging.info("Pridėta akcija: %s -> %s", simbolis, riba)
         except ValueError:
@@ -136,6 +140,8 @@ def apdoroti_komanda(komanda, stocks, check_interval, busena):
             del stocks[simbolis]
             if simbolis in busena:
                 del busena[simbolis]
+            save_settings({"stocks": stocks, "check_interval": check_interval})
+            issaugoti_busena(busena)
             siusti_telegram(f"🗑 Pašalinta: {simbolis}")
             logging.info("Pašalinta akcija: %s", simbolis)
         else:
@@ -151,6 +157,7 @@ def apdoroti_komanda(komanda, stocks, check_interval, busena):
                 siusti_telegram("Intervalas turi būti bent 10 sekundžių.")
                 return stocks, check_interval
             check_interval = naujas
+            save_settings({"stocks": stocks, "check_interval": check_interval})
             siusti_telegram(f"✅ Naujas intervalas: {check_interval} s")
             logging.info("Atnaujintas intervalas: %s", check_interval)
         except ValueError:
@@ -168,11 +175,10 @@ def main():
     print("Programa pradėta. Pradedamas ciklas...\n")
     busena = uzkrauti_busena()
 
-    # Runtime būsena
-    stocks = dict(MANO_AKCIJOS)
-    check_interval = int(CHECK_INTERVAL)
+    settings = load_settings()
+    stocks = settings["stocks"]
+    check_interval = int(settings["check_interval"])
 
-    # Svarbiausia dalis: praleidžiam senas žinutes paleidimo metu
     paskutinis_update_id = gauti_paskutini_update_id()
     print(f"Start offset: {paskutinis_update_id}")
     logging.info("Start offset: %s", paskutinis_update_id)
@@ -180,7 +186,7 @@ def main():
     while True:
         print(f"[{time.strftime('%H:%M:%S')}] Pradedamas naujas patikrinimas...")
 
-        komanda, update_id = gauti_paskutine_komanda(
+        komanda, update_id = gauti_update(
             None if paskutinis_update_id is None else paskutinis_update_id + 1
         )
         if update_id is not None:
@@ -214,7 +220,6 @@ def main():
                         f"{status} {simbolis}: {dabartine_kaina} USD | "
                         f"riba: {norima_riba} USD | pokytis: {formatuoti_pokyti(pokytis)}"
                     )
-
             except Exception as e:
                 print(f"❌ Klaida tikrinant {simbolis}: {e}")
                 logging.error("Klaida tikrinant %s: %s", simbolis, e)

@@ -54,3 +54,7 @@ def gauti_paskutine_komanda(offset: Optional[int] = None):
     except Exception as e:
         print(f"Klaida skaitant Telegram komandas: {e}")
         return None, None
+
+def gauti_update(offset=None):
+    # jei jau turi gauti_paskutine_komanda, peradresuok:
+    return gauti_paskutine_komanda(offset)

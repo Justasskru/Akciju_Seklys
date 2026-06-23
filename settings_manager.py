@@ -1,42 +1,51 @@
-import requests
-from config import TELEGRAM_TOKEN, TELEGRAM_CHAT_ID
+import json
+import os
+from config import MANO_AKCIJOS, CHECK_INTERVAL
 
-BASE_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
+SETTINGS_FILE = "settings.json"
 
-def siusti_telegram(zinute):
-    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
-        print("Trūksta TELEGRAM_TOKEN arba TELEGRAM_CHAT_ID .env faile")
-        return False
+def default_settings():
+    return {
+        "stocks": dict(MANO_AKCIJOS),
+        "check_interval": int(CHECK_INTERVAL)
+    }
 
-    url = f"{BASE_URL}/sendMessage"
-    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": zinute}
+def save_settings(data):
+    with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+def load_settings():
+    if not os.path.exists(SETTINGS_FILE):
+        data = default_settings()
+        save_settings(data)
+        return data
 
     try:
-        r = requests.post(url, data=payload, timeout=10)
-        r.raise_for_status()
-        return True
-    except requests.RequestException as e:
-        print("Nepavyko išsiųsti žinutės:", e)
-        return False
+        with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception:
+        data = default_settings()
+        save_settings(data)
+        return data
 
-def gauti_update(offset=None):
-    url = f"{BASE_URL}/getUpdates"
-    params = {"timeout": 1}
-    if offset is not None:
-        params["offset"] = offset
+    if "stocks" not in data or not isinstance(data["stocks"], dict):
+        data["stocks"] = dict(MANO_AKCIJOS)
+
+    if "check_interval" not in data:
+        data["check_interval"] = int(CHECK_INTERVAL)
+
+    normalized = {}
+    for k, v in data["stocks"].items():
+        try:
+            normalized[str(k).upper()] = float(v)
+        except Exception:
+            pass
+    data["stocks"] = normalized
+
     try:
-        r = requests.get(url, params=params, timeout=6)
-        r.raise_for_status()
-        data = r.json()
-        if not data.get("ok"):
-            return None, None
-        results = data.get("result", [])
-        if not results:
-            return None, None
-        last = results[-1]
-        text = last.get("message", {}).get("text", "")
-        update_id = last.get("update_id")
-        return text, update_id
-    except Exception as e:
-        print("Klaida getUpdates:", e)
-        return None, None
+        data["check_interval"] = int(data["check_interval"])
+    except Exception:
+        data["check_interval"] = int(CHECK_INTERVAL)
+
+    save_settings(data)
+    return data
