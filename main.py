@@ -1,6 +1,7 @@
 import time
 import logging
 import requests
+import sys
 
 from config import TELEGRAM_TOKEN
 from price_fetcher import gauti_kaina_ir_pokyti
@@ -15,6 +16,27 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logging.info("Programa pradėta")
+
+
+def rodyti_countdown(sekundes):
+    try:
+        sekundes = int(sekundes)
+    except (TypeError, ValueError):
+        print("\n⚠️ Neteisingas intervalas countdown funkcijai.")
+        return
+
+    if sekundes <= 0:
+        print("\n⚠️ Intervalas turi būti > 0.")
+        return
+
+    for liko in range(sekundes, 0, -1):
+        mins, seks = divmod(liko, 60)
+        sys.stdout.write(f"\rLiko iki kito patikrinimo: {mins:02d}:{seks:02d}")
+        sys.stdout.flush()
+        time.sleep(1)
+
+    sys.stdout.write("\rLiko iki kito patikrinimo: 00:00\n")
+    sys.stdout.flush()
 
 
 def gauti_paskutini_update_id():
@@ -87,15 +109,19 @@ def apdoroti_komanda(komanda, stocks, check_interval, busena):
 
     if cmd == "/help":
         siusti_telegram(help_zinute())
+        logging.info("Išsiųsta pagalbos žinutė į Telegram")
 
     elif cmd == "/status":
         siusti_telegram(sugeneruoti_statuso_zinute(stocks))
+        logging.info("Išsiųstas dabartinis statusas į Telegram")
 
     elif cmd == "/list":
         siusti_telegram(sugeneruoti_list_zinute(stocks))
+        logging.info("Išsiųstas akcijų sąrašas į Telegram")
 
     elif cmd == "/show_interval":
         siusti_telegram(f"⏱ Dabartinis tikrinimo intervalas: {check_interval} s")
+        logging.info("Išsiųstas dabartinis intervalas į Telegram")
 
     elif cmd == "/set":
         if len(args) != 2:
@@ -112,6 +138,7 @@ def apdoroti_komanda(komanda, stocks, check_interval, busena):
             siusti_telegram(f"✅ Atnaujinta: {simbolis} riba -> {riba} USD")
             logging.info("Atnaujinta riba: %s -> %s", simbolis, riba)
         except ValueError:
+            logging.warning("Neteisinga riba keičiant akciją: %s", args[1])
             siusti_telegram("Riba turi būti skaičius. Pvz: /set AAPL 210")
 
     elif cmd == "/add":
@@ -129,6 +156,7 @@ def apdoroti_komanda(komanda, stocks, check_interval, busena):
             siusti_telegram(f"✅ Pridėta: {simbolis} su riba {riba} USD")
             logging.info("Pridėta akcija: %s -> %s", simbolis, riba)
         except ValueError:
+            logging.warning("Neteisinga riba pridedant akciją: %s", args[1])
             siusti_telegram("Riba turi būti skaičius. Pvz: /add TSLA 180")
 
     elif cmd == "/remove":
@@ -161,6 +189,7 @@ def apdoroti_komanda(komanda, stocks, check_interval, busena):
             siusti_telegram(f"✅ Naujas intervalas: {check_interval} s")
             logging.info("Atnaujintas intervalas: %s", check_interval)
         except ValueError:
+            logging.warning("Neteisingas intervalas: %s", args[0])
             siusti_telegram("Intervalas turi būti sveikas skaičius. Pvz: /interval 300")
 
     elif cmd == "/kill":
@@ -209,10 +238,12 @@ def main():
                     print(zinute)
                     siusti_telegram(zinute)
                     busena[simbolis] = True
+                    logging.info("Išsiųstas įspėjimas apie %s", simbolis)
 
                 elif not yra_zemiau and buvo_zemiau:
                     print(f"✅ {simbolis} pakilo virš ribos: {dabartine_kaina} USD")
                     busena[simbolis] = False
+                    logging.info("Atnaujinta būsena (virš ribos) %s", simbolis)
 
                 else:
                     status = "🔴 ŽEMIAU ribos" if yra_zemiau else "🟢 Virš ribos"
@@ -230,8 +261,11 @@ def main():
             print("⚠️ CHECK_INTERVAL yra mažas, įsitikinkite, kad tai neperkraus API!")
             logging.warning("Labai mažas intervalas: %s", check_interval)
 
-        time.sleep(check_interval)
+        rodyti_countdown(check_interval)
 
+if KeyboardInterrupt:
+    print("\nPrograma nutraukiama vartotojo.")
+    logging.info("Programa nutraukiama vartotojo.")
 
 if __name__ == "__main__":
     main()
