@@ -226,6 +226,20 @@ def run_bot(stop_event: Optional[threading.Event] = None):
             logging.info("Botas sustabdytas per stop_event.")
             break
 
+        # 🔄 KIEKVIENO CIKLO PRADŽIOJE perkraunami nustatymai iš settings.json
+        nauji = load_settings()
+        stocks = nauji.get("stocks", stocks)
+        check_interval = int(nauji.get("check_interval", check_interval))
+
+        # Suderinam busena su nauju akcijų sąrašu
+        for simbolis in stocks.keys():
+            if simbolis not in busena:
+                busena[simbolis] = False
+
+        for simbolis in list(busena.keys()):
+            if simbolis not in stocks:
+                del busena[simbolis]
+
         print(f"[{time.strftime('%H:%M:%S')}] Pradedamas naujas patikrinimas...")
 
         komanda, update_id = gauti_update(

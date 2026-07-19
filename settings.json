@@ -4,8 +4,8 @@
     "TSLA": 340.01,
     "MSFT": 350.0,
     "GOOGL": 300.0,
-    "NVDA": 700.0,
+    "NVDA": 300.0,
     "AMZN": 240.0
   },
-  "check_interval": 30
+  "check_interval": 340
 }

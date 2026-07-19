@@ -3,7 +3,6 @@ import streamlit as st
 from main import run_bot
 from settings_manager import load_settings, save_settings
 
-
 st.set_page_config(page_title="Akcijų Seklys Bot", page_icon="📈", layout="centered")
 st.title("📈 Akcijų Seklys Bot valdymas")
 
@@ -69,7 +68,7 @@ with col2:
         stop_bot()
         st.warning("Botas stabdomas...")
 
-st.caption("Pastaba: sustabdymas įvyksta saugiai per kelias sekundes (iki artimiausio ciklo taško).")
+st.caption("Pastaba: nustatymai perkraunami automatiškai kiekvieno ciklo pradžioje.")
 
 settings = load_settings()
 stocks = settings.get("stocks", {})
