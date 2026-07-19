@@ -7,5 +7,5 @@
     "NVDA": 700.0,
     "AMZN": 240.0
   },
-  "check_interval": 20
+  "check_interval": 60
 }

@@ -20,6 +20,7 @@ with c1:
     if st.button("▶️ Paleisti botą", use_container_width=True):
         ok, msg = start_bot()
         if ok:
+            start_bot()
             st.success(msg)
         else:
             st.info(msg)
@@ -29,6 +30,7 @@ with c2:
     if st.button("⏹ Stabdyti botą", use_container_width=True):
         ok, msg = stop_bot()
         if ok:
+            stop_bot()
             st.success(msg)
         else:
             st.info(msg)
