@@ -2,6 +2,8 @@ import time
 import logging
 import requests
 import sys
+import threading
+from typing import Optional
 
 from config import TELEGRAM_TOKEN
 from price_fetcher import gauti_kaina_ir_pokyti
@@ -18,7 +20,7 @@ logging.basicConfig(
 logging.info("Programa pradėta")
 
 
-def rodyti_countdown(sekundes):
+def rodyti_countdown(sekundes, stop_event: Optional[threading.Event] = None):
     try:
         sekundes = int(sekundes)
     except (TypeError, ValueError):
@@ -30,6 +32,9 @@ def rodyti_countdown(sekundes):
         return
 
     for liko in range(sekundes, 0, -1):
+        if stop_event and stop_event.is_set():
+            print("\n🛑 Gauta stop komanda. Countdown stabdomas.")
+            return
         mins, seks = divmod(liko, 60)
         sys.stdout.write(f"\rLiko iki kito patikrinimo: {mins:02d}:{seks:02d}")
         sys.stdout.flush()
@@ -98,7 +103,7 @@ def help_zinute():
     )
 
 
-def apdoroti_komanda(komanda, stocks, check_interval, busena):
+def apdoroti_komanda(komanda, stocks, check_interval, busena, stop_event: Optional[threading.Event] = None):
     if not komanda:
         return stocks, check_interval
 
@@ -193,14 +198,17 @@ def apdoroti_komanda(komanda, stocks, check_interval, busena):
             siusti_telegram("Intervalas turi būti sveikas skaičius. Pvz: /interval 300")
 
     elif cmd == "/kill":
-        siusti_telegram("🛑 Programa nutraukiama pagal komandą /kill")
-        logging.info("Programa nutraukiama pagal komandą /kill")
-        raise SystemExit
+        siusti_telegram("🛑 Programa stabdoma pagal komandą /kill")
+        logging.info("Programa stabdoma pagal komandą /kill")
+        if stop_event:
+            stop_event.set()
+        else:
+            raise SystemExit
 
     return stocks, check_interval
 
 
-def main():
+def run_bot(stop_event: Optional[threading.Event] = None):
     print("Programa pradėta. Pradedamas ciklas...\n")
     busena = uzkrauti_busena()
 
@@ -213,6 +221,11 @@ def main():
     logging.info("Start offset: %s", paskutinis_update_id)
 
     while True:
+        if stop_event and stop_event.is_set():
+            print("🛑 Botas sustabdytas per stop_event.")
+            logging.info("Botas sustabdytas per stop_event.")
+            break
+
         print(f"[{time.strftime('%H:%M:%S')}] Pradedamas naujas patikrinimas...")
 
         komanda, update_id = gauti_update(
@@ -221,9 +234,19 @@ def main():
         if update_id is not None:
             paskutinis_update_id = update_id
 
-        stocks, check_interval = apdoroti_komanda(komanda, stocks, check_interval, busena)
+        stocks, check_interval = apdoroti_komanda(
+            komanda, stocks, check_interval, busena, stop_event=stop_event
+        )
+
+        if stop_event and stop_event.is_set():
+            print("🛑 Gauta stop komanda po Telegram komandų apdorojimo.")
+            logging.info("Stop po komandų apdorojimo.")
+            break
 
         for simbolis, norima_riba in stocks.items():
+            if stop_event and stop_event.is_set():
+                print("🛑 Stop ciklo metu.")
+                break
             try:
                 dabartine_kaina, pokytis = gauti_kaina_ir_pokyti(simbolis)
                 buvo_zemiau = busena.get(simbolis, False)
@@ -261,11 +284,19 @@ def main():
             print("⚠️ CHECK_INTERVAL yra mažas, įsitikinkite, kad tai neperkraus API!")
             logging.warning("Labai mažas intervalas: %s", check_interval)
 
-        rodyti_countdown(check_interval)
+        rodyti_countdown(check_interval, stop_event=stop_event)
 
-if KeyboardInterrupt:
-    print("\nPrograma nutraukiama vartotojo.")
-    logging.info("Programa nutraukiama vartotojo.")
+    print("✅ Botas sustabdytas.")
+    logging.info("Botas sustabdytas.")
+
+
+def main():
+    try:
+        run_bot(stop_event=None)
+    except KeyboardInterrupt:
+        print("\nPrograma nutraukiama vartotojo.")
+        logging.info("Programa nutraukiama vartotojo.")
+
 
 if __name__ == "__main__":
     main()
